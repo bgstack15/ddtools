@@ -25,7 +25,6 @@ version ${updatezoneversion}
  -d debug   Show debugging info, including parsed variables.
  -u usage   Show this usage block.
  -V version Show script version number.
- -i infile  Overrides default infile value. Default is none.
  -c conffile Choose which conffile. Required.
 Return values:
 0 Normal
@@ -185,7 +184,7 @@ outfile1=
 logfile=${scriptdir}/${scripttrim}.${today}.out
 define_if_new interestedparties "bgstack15@gmail.com"
 # SIMPLECONF
-define_if_new default_conffile "/etc/updatezone/updatezone.conf"
+#define_if_new default_conffile "/etc/updatezone/updatezone.conf"
 #define_if_new defuser_conffile ~/.config/updatezone/updatezone.conf
 define_if_new EDITOR vi
 
@@ -227,10 +226,12 @@ if test -f "${conffile}";
 then
    get_conf "${conffile}"
 else
-   if test "${conffile}" = "${default_conffile}" || test "${conffile}" = "${defuser_conffile}"; then :; else ferror "${scriptfile}: Ignoring conf file which is not found: ${conffile}."; fi
+   #if test "${conffile}" = "${default_conffile}" || test "${conffile}" = "${defuser_conffile}"; then :; else
+   ferror "${scriptfile}: Ignoring conf file which is not found: ${conffile}."
+   #fi
 fi
 #test -f "${defuser_conffile}" && get_conf "${defuser_conffile}"
-test -f "${default_conffile}" && get_conf "${default_conffile}"
+#test -f "${default_conffile}" && get_conf "${default_conffile}"
 
 ## REACT TO BEING A CRONJOB
 #if test ${is_cronjob} -eq 1;
@@ -308,14 +309,17 @@ done
       done < "${zones_to_update_file}"
 
       # Execute command on each slave server
-      x=0
-      while test ${x} -lt ${UZ_SLAVE_COUNT};
-      do
-         x=$(( x + 1 ))
-         eval this_dns_slave=\"\${UZ_SLAVE_${x}}\"
-         debuglev 5 && ferror "ssh ${this_dns_slave} ${transfercommand}"
-         ssh ${this_dns_slave} ${transfercommand}
-      done
+      if test -n "${transfercommand}";
+      then
+         x=0
+         while test ${x} -lt ${UZ_SLAVE_COUNT};
+         do
+            x=$(( x + 1 ))
+            eval this_dns_slave=\"\${UZ_SLAVE_${x}}\"
+            debuglev 5 && ferror "ssh ${this_dns_slave} ${transfercommand}"
+            ssh ${this_dns_slave} ${transfercommand}
+         done
+      fi
 
 #} | tee -a ${logfile}
 
