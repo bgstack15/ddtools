@@ -1,0 +1,3 @@
+docs/README.txt
+docs/updatezone.spec
+docs/debian-updatezone/control

@@ -1,0 +1,7 @@
+UZ_ZONE_NAME=ipa.smith122.com
+UZ_FORWARD_ZONE=ipa.smith122.com
+UZ_FORWARD_FILE=/var/named/data/db.ipa.smith122.com
+UZ_REVERSE_ZONE=1.168.192.in-addr.arpa
+UZ_REVERSE_FILE=/var/named/data/db.192.168.1
+UZ_SLAVE_COUNT=1
+UZ_SLAVE_1=dns2
