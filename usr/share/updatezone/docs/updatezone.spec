@@ -47,8 +47,8 @@ exit 0
 %config %attr(666, -, -) /usr/share/updatezone/examples/ipa.smith122.com.conf.example
 %doc %attr(444, -, -) /usr/share/updatezone/docs/files-for-versioning.txt
 %doc %attr(444, -, -) /usr/share/updatezone/docs/packaging.txt
-/usr/share/updatezone/docs/updatezone.spec
 %doc %attr(444, -, -) /usr/share/updatezone/docs/README.txt
+/usr/share/updatezone/docs/updatezone.spec
 /usr/share/updatezone/updatezone.sh
 %verify(link) /usr/bin/updatezone
 
