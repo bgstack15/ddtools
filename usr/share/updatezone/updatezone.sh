@@ -20,12 +20,13 @@ updatezoneversion="2017-05-27a"
 
 usage() {
    less -F >&2 <<ENDUSAGE
-usage: updatezone.sh [-duV] -c conffile
+usage: updatezone.sh [-duV] [ -c conffile | zone1 zone2 ... ]
 version ${updatezoneversion}
  -d debug   Show debugging info, including parsed variables.
  -u usage   Show this usage block.
  -V version Show script version number.
- -c conffile Choose which conffile. Required.
+ -c conffile Choose which conffile. Required if you do not name specific zones
+ zone1      Dns zone defined as UZ_ZONE_NAME in any .conf file in ${default_dir}/
 Return values:
 0 Normal
 1 Help or version info displayed
@@ -187,6 +188,7 @@ define_if_new interestedparties "bgstack15@gmail.com"
 #define_if_new default_conffile "/etc/updatezone/updatezone.conf"
 #define_if_new defuser_conffile ~/.config/updatezone/updatezone.conf
 define_if_new EDITOR vi
+define_if_new default_dir "/etc/updatezone"
 
 # REACT TO OPERATING SYSTEM TYPE
 case $( uname -s ) in
@@ -213,6 +215,13 @@ esac
 # to debug flags, use option DEBUG. Variables set in framework: fallopts
 validateparams - "$@"
 
+# CONFIRM TOTAL NUMBER OF FLAGLESSVALS IS CORRECT
+#if test ${thiscount} -lt 1;
+#then
+#   #ferror "${scriptfile}: 2. Fewer than 2 flaglessvals. Aborted."
+#   #exit 2
+#fi
+
 # CONFIGURE VARIABLES AFTER PARAMETERS
 
 ## LOAD CONFIG FROM SIMPLECONF
@@ -222,14 +231,14 @@ validateparams - "$@"
 ##    3. config file
 ##    4. default user config: ~/.config/script/script.conf
 ##    5. default config: /etc/script/script.conf
-if test -f "${conffile}";
-then
-   get_conf "${conffile}"
-else
-   #if test "${conffile}" = "${default_conffile}" || test "${conffile}" = "${defuser_conffile}"; then :; else
-   ferror "${scriptfile}: Ignoring conf file which is not found: ${conffile}."
-   #fi
-fi
+#if test -f "${conffile}";
+#then
+#   get_conf "${conffile}"
+#else
+#   #if test "${conffile}" = "${default_conffile}" || test "${conffile}" = "${defuser_conffile}"; then :; else
+#   ferror "${scriptfile}: Ignoring conf file which is not found: ${conffile}."
+#   #fi
+#fi
 #test -f "${defuser_conffile}" && get_conf "${defuser_conffile}"
 #test -f "${default_conffile}" && get_conf "${default_conffile}"
 
@@ -246,12 +255,12 @@ trap "CTRLC" 2
 #trap "CTRLZ" 18
 trap "clean_updatezone" 0
 
-# DEBUG SIMPLECONF
-debuglev 5 && {
-   ferror "Using values"
-   # used values: EX_(OPT1|OPT2|VERBOSE)
-   set | grep -iE "^UZ_" 1>&2
-}
+## DEBUG SIMPLECONF
+#debuglev 5 && {
+#   ferror "Using values"
+#   # used values: EX_(OPT1|OPT2|VERBOSE)
+#   set | grep -iE "^UZ_" 1>&2
+#}
 
 # MAKE TEMP LOCATIONS
 tempdir=/tmp/updatezone/
@@ -261,22 +270,30 @@ then
    exit 4
 fi
 
-temp_for_file="$( mktemp -p "${tempdir}" forward.XXXX 2>/dev/null )"
-temp_rev_file="$( mktemp -p "${tempdir}" reverse.XXXX 2>/dev/null )"
-zones_to_thaw_file="$( mktemp -p "${tempdir}" thaw.XXXX )"
-zones_to_update_file="$( mktemp -p "${tempdir}" update.XXXX )"
-for word in "${temp_for_file}" "${temp_rev_file}";
-do
-   if test ! -f "${word}";
-   then
-      ferror "${scriptfile}: 4. Unable to make temp file ${word}. Aborted."
-      exit 4
-   fi
-done
-
 # MAIN LOOP
-#{
-   pause_to_show_error=0
+main() {
+   # call: main "${conffile}"
+   get_conf "$1"
+   # DEBUG SIMPLECONF
+   debuglev 5 && {
+      ferror "Using values"
+      # used values: EX_(OPT1|OPT2|VERBOSE)
+      set | grep -iE "^UZ_" 1>&2
+   }
+   local temp_for_file="$( mktemp -p "${tempdir}" forward.XXXX 2>/dev/null )"
+   local temp_rev_file="$( mktemp -p "${tempdir}" reverse.XXXX 2>/dev/null )"
+   local zones_to_thaw_file="$( mktemp -p "${tempdir}" thaw.XXXX )"
+   local zones_to_update_file="$( mktemp -p "${tempdir}" update.XXXX )"
+   for word in "${temp_for_file}" "${temp_rev_file}";
+   do
+      if test ! -f "${word}";
+      then
+         ferror "${scriptfile}: 4. Unable to make temp file ${word}. Aborted."
+         exit 4
+      fi
+   done
+
+   local pause_to_show_error=0
    # Check forward zone file and freeze
    check_zone_file forward "${UZ_FORWARD_ZONE}" "${UZ_FORWARD_FILE}" "${temp_for_file}"
 
@@ -287,7 +304,8 @@ done
    fistruthy "${pause_to_show_error}" && sleep 1.3
 
    # Allow user to edit files that exist
-   $EDITOR $( find "${temp_for_file}" "${temp_rev_file}" 2>/dev/null | xargs )
+   local these_temp_files="$( find "${temp_for_file}" "${temp_rev_file}" 2>/dev/null | xargs )"
+   test -n "${these_temp_files}" && $EDITOR ${these_temp_files}
 
    # Update the real zone if the temp file was updated
    update_real_zone_if_updated "${UZ_FORWARD_ZONE}" "${UZ_FORWARD_FILE}" "${temp_for_file}"
@@ -321,7 +339,29 @@ done
          done
       fi
 
-#} | tee -a ${logfile}
+} #| tee -a ${logfile}
+
+
+if test -n "${conffile}";
+then
+   ( main "${conffile}"; )
+else
+   # assume the $opt items are the zone names
+   y=0
+   while test $y -lt $thiscount;
+   do
+      y=$(( y + 1 ))
+      eval "thiszonename=\${opt${y}}"
+      debuglev 1 && ferror "Will try to update zone ${thiszonename}"
+      file_for_this_zone="$( grep -liE "UZ_ZONE_NAME=${thiszonename}" "${default_dir}/"*.conf 2>/dev/null )"
+      if test -n "${file_for_this_zone}" && test -f "${file_for_this_zone}";
+      then
+         ( main "${file_for_this_zone}"; )
+      else
+         ferror "Skipping zone ${thiszonename} for which no file was found in ${default_dir}/"
+      fi
+   done
+fi
 
 # EMAIL LOGFILE
 #${sendsh} ${sendopts} "${server} ${scriptfile} out" ${logfile} ${interestedparties}
