@@ -47,10 +47,11 @@ exit 0
 %config %attr(666, -, -) /usr/share/updatezone/examples/ipa.smith122.com.conf.example
 %doc %attr(444, -, -) /usr/share/updatezone/docs/files-for-versioning.txt
 %doc %attr(444, -, -) /usr/share/updatezone/docs/packaging.txt
-%doc %attr(444, -, -) /usr/share/updatezone/docs/README.txt
 /usr/share/updatezone/docs/updatezone.spec
+%doc %attr(444, -, -) /usr/share/updatezone/docs/README.txt
 /usr/share/updatezone/updatezone.sh
+%verify(link) /usr/bin/updatezone
 
 %changelog
-* Fri May 26 2017 B Stack <bgstack15@gmail.com> 0.0-1
+* Sat May 27 2017 B Stack <bgstack15@gmail.com> 0.0-1
 - Initial rpm release
