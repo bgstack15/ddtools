@@ -10,7 +10,7 @@ URL:		https://bgstack15.wordpress.com/
 #Distribution:
 #Vendor:
 Packager:	B Stack <bgstack15@gmail.com>
-Requires:	bgscripts >= 1.2-11
+Requires:	bgscripts-core >= 1.2-11
 Buildarch:	noarch
 
 %description
