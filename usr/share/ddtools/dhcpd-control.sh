@@ -10,6 +10,7 @@
 # Usage: 
 # Reference: ftemplate.sh 2017-05-24a; framework.sh 2017-05-24a
 #    order of dhcpd servers to restart https://kb.isc.org/article/AA-01043/0/Recommendations-for-restarting-a-DHCP-failover-pair.html
+#    merge lines with sed http://www.linuxquestions.org/questions/programming-9/merge-lines-in-a-file-using-sed-191121/
 # Improve:
 #    provide mechanisms for non-systemd service control
 # Dependencies:
@@ -44,7 +45,9 @@ ENDUSAGE
 # DEFINE TRAPS
 
 clean_dhcpdcontrol() {
-   rm -f ${tmp_dhcpd_combined_file} ${tmp_dhcpd_local_file} ${tmp_dhcpd_other_file} > /dev/null 2>&1
+   {
+      rm -f ${tmp_dhcpd_combined_file} ${tmp_dhcpd_local_file} ${tmp_dhcpd_other_file} ${tmp_mac_local_file} ${tmp_macless_local_file}
+   } 1>/dev/null 2>&1
    #use at end of entire script if you need to clean up tmpfiles
 }
 
@@ -73,7 +76,7 @@ parseFlag() {
       "edit-local" ) action="edit-local";;
       "edit-other" ) action="edit-other";;
       "edit" ) action="edit";;
-      "remove-mac" ) getval; DHCPD_CONTROL_MAC_TO_REMOVE="${tempval}";;
+      "remove-mac" ) getval; DHCPD_CONTROL_MAC_TO_REMOVE="${tempval}"; action="remove-mac";;
    esac
    
    debuglev 10 && { test ${hasval} -eq 1 && ferror "flag: ${flag} = ${tempval}" || ferror "flag: ${flag}"; }
@@ -248,10 +251,11 @@ trap "clean_dhcpdcontrol" 0
    update_conf_other=0
    update_leases_other=0
    restart_service_other=0
-   # WORKHERE: add local service, other_server_service
+   debuglev 8 && ferror "BEGIN action ${action}"
    case "${action}" in
 
       "flush")
+         debuglev 8 && ferror "BEGIN flush"
          # Clear temorary leases file
          debuglev 4 && ferror "Flushing all leases"
          if test -z "${DHCPD_CONTROL_LEASES_TEMP_FILE}";
@@ -298,6 +302,7 @@ trap "clean_dhcpdcontrol" 0
          ;;
 
       "edit")
+         debuglev 8 && ferror "BEGIN edit"
          # prepare temp file
          tmp_dhcpd_combined_file="$( mktemp -p /tmp dhcpd.combined.XXXXX )"
          cp -p "${DHCPD_CONTROL_COMBINED_FILE}" "${tmp_dhcpd_combined_file}"
@@ -316,6 +321,7 @@ trap "clean_dhcpdcontrol" 0
          ;;
 
       "edit-local")
+         debuglev 8 && ferror "BEGIN edit-local"
          # prepare temp file
          tmp_dhcpd_local_file="$( mktemp -p /tmp dhcpd.XXXXX )"
          cp -p "${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_local_file}"
@@ -331,6 +337,7 @@ trap "clean_dhcpdcontrol" 0
          ;;
 
       "edit-other")
+         debuglev 8 && ferror "BEGIN edit-other"
          tmp_dhcpd_other_file="$( mktemp -p /tmp dhcpd.other.XXXXX )"
          scp -p "${DHCPD_CONTROL_OTHER_SERVER}:${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_other_file}"
          cp -p "${tmp_dhcpd_other_file}" "${tmp_dhcpd_other_file}8" #arbitrary number # edit file
@@ -344,9 +351,39 @@ trap "clean_dhcpdcontrol" 0
          fi
          ;;
 
+      "remove-mac")
+         debuglev 8 && ferror "BEGIN remove-mac"
+         # working on this
+         # WORKHERE: verify that doing it on local is sufficient.
+         # sed -n -r -e '/^lease.*\{/,/^\}/{/^lease|hardware|\}/{p}}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' # base form
+         # sed -n -r -e '/^lease.*\{/,/^\}/{p}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' # slightly trimmed
+         # sed -n -r -e '/\{/,/^\}/{p}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "ec:9a:74:48:bc:c4" # find the one mac address
+         tmp_mac_local_file="$( mktemp -p /tmp leases.mac.XXXXX )"
+         tmp_macless_local_file="$( mktemp -p /tmp leases.macless.XXXXX )"
+         if test -z "${DHCPD_CONTROL_MAC_TO_REMOVE}";
+         then
+            ferror "${scripttrim}: 2. No MAC address provided. aborted."
+            exit 2
+         fi
+         sed -n -r -e '/\{/,/^\}/{p}' "${DHCPD_CONTROL_LEASES_FILE}" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "${DHCPD_CONTROL_MAC_TO_REMOVE}" > "${tmp_mac_local_file}"
+         if test -n "$( cat "${tmp_mac_local_file}" )";
+         then
+            ferror "Removing leases:"
+            cat "${tmp_mac_local_file}" 1>&2
+         fi
+         sed -n -r -e '/\{/,/^\}/{p}' "${DHCPD_CONTROL_LEASES_FILE}" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -viE "${DHCPD_CONTROL_MAC_TO_REMOVE}" > "${tmp_macless_local_file}"
+         if ! cmp -s "${tmp_macless_local_file}" "${DHCPD_CONTROL_LEASES_FILE}"
+         then
+            systemctl stop "${DHCPD_CONTROL_SERVICE}"
+            cp -p "${tmp_macless_local_file}" "${DHCPD_CONTROL_LEASES_FILE}"
+            restart_service_local=1
+         fi
+         ;;
+
    esac
 
    # Prepare instructions for other server
+   debuglev 8 && ferror "BEGIN prepare instructions for other server"
    local_instructions=""
    other_instructions=""
    instructions=""
@@ -360,6 +397,7 @@ trap "clean_dhcpdcontrol" 0
       other_instructions="${other_instructions}systemctl restart ${DHCPD_CONTROL_SERVICE}"
 
    # Instruct other server to act
+   debuglev 8 && ferror "BEGIN instruct other server to act"
    if test -n "${DHCPD_CONTROL_OTHER_SERVER}";
    then
       debuglev 1 && {
