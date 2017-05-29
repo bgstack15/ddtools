@@ -11,7 +11,7 @@
 # Reference: ftemplate.sh 2017-05-24a; framework.sh 2017-05-24a
 # Improve:
 fiversion="2017-05-24a"
-dhcpdcontrolversion="2017-05-28a"
+dhcpdcontrolversion="2017-05-29a"
 
 usage() {
    less -F >&2 <<ENDUSAGE
@@ -101,7 +101,7 @@ action=""
 define_if_new interestedparties "bgstack15@gmail.com"
 # SIMPLECONF
 #define_if_new default_conffile "/etc/sysconfig/dhcpd-control"
-define_if_new default_conffile "/home/bgirton/rpmbuild/SOURCES/updatezone-0.0-2/etc/sysconfig/dhcpd-control"
+define_if_new default_conffile "/home/bgirton/rpmbuild/SOURCES/ddtools-0.0-2/etc/sysconfig/dhcpd-control"
 #define_if_new defuser_conffile ~/.config/dhcpdcontrol/dhcpdcontrol.conf
 define_if_new EDITOR vi
 

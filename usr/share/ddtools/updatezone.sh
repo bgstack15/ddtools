@@ -16,7 +16,7 @@
 #    ssh with password-less authentication to slave servers
 #    each zone file has only a single zone
 fiversion="2017-05-24a"
-updatezoneversion="2017-05-27a"
+updatezoneversion="2017-05-29a"
 
 usage() {
    less -F >&2 <<ENDUSAGE
@@ -185,10 +185,10 @@ outfile1=
 logfile=${scriptdir}/${scripttrim}.${today}.out
 define_if_new interestedparties "bgstack15@gmail.com"
 # SIMPLECONF
-#define_if_new default_conffile "/etc/updatezone/updatezone.conf"
-#define_if_new defuser_conffile ~/.config/updatezone/updatezone.conf
+#define_if_new default_conffile "/etc/ddtools/updatezone.conf"
+#define_if_new defuser_conffile ~/.config/ddtools/updatezone.conf
 define_if_new EDITOR vi
-define_if_new default_dir "/etc/updatezone"
+define_if_new default_dir "/etc/ddtools"
 
 # REACT TO OPERATING SYSTEM TYPE
 case $( uname -s ) in
