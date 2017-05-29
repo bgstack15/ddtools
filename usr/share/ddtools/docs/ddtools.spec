@@ -40,20 +40,18 @@ exit 0
 exit 0
 
 %files
-%dir /etc/updatezone
-%dir /usr/share/updatezone
-%dir /usr/share/updatezone/inc
-%dir /usr/share/updatezone/examples
-%dir /usr/share/updatezone/docs
-/usr/share/updatezone/inc/pack
-/usr/share/updatezone/inc/get-files
-%config %attr(666, -, -) /usr/share/updatezone/examples/ipa.smith122.com.conf.example
-%doc %attr(444, -, -) /usr/share/updatezone/docs/files-for-versioning.txt
-%doc %attr(444, -, -) /usr/share/updatezone/docs/packaging.txt
-%doc %attr(444, -, -) /usr/share/updatezone/docs/README.txt
-/usr/share/updatezone/docs/updatezone.spec
-/usr/share/updatezone/updatezone.sh
+%dir /usr/share/ddtools
+/etc/sysconfig/dhcpd-control
+/usr/share/ddtools/inc/get-files
+/usr/share/ddtools/inc/pack
+%config %attr(666, -, -) /usr/share/ddtools/examples/ipa.smith122.com.conf.example
+%doc %attr(444, -, -) /usr/share/ddtools/docs/files-for-versioning.txt
+%doc %attr(444, -, -) /usr/share/ddtools/docs/README.txt
+/usr/share/ddtools/docs/ddtools.spec
+/usr/share/ddtools/updatezone.sh
+/usr/share/ddtools/dhcpd-control.sh
 %verify(link) /usr/bin/updatezone
+%verify(link) /usr/bin/dhcpd-control
 
 %changelog
 * Sat May 27 2017 B Stack <bgstack15@gmail.com> 0.0-1
