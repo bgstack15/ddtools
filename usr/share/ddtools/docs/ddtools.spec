@@ -40,6 +40,7 @@ exit 0
 exit 0
 
 %files
+%dir /etc/ddtools
 %dir /usr/share/ddtools
 /etc/sysconfig/dhcpd-control
 /usr/share/ddtools/inc/get-files
