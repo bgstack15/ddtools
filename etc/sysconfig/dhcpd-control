@@ -1,0 +1,5 @@
+DHCPD_CONTROL_COMBINED_FILE=/etc/dhcp/dhcpd.combined.conf
+DHCPD_CONTROL_DHCPD_FILE=/etc/dhcp/dhcpd.conf
+DHCPD_CONTROL_LEASES_FILE=/var/lib/dhcpd/dhcpd.leases
+DHCPD_CONTROL_LEASES_TEMP_FILE=/var/lib/dhcpd/dhcpd.leases~
+DHCPD_CONTROL_SERVICE=dhcpd

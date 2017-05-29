@@ -2,7 +2,7 @@
 Summary:	update dns zone files easily
 Name:		updatezone
 Version:	0.0
-Release:	1
+Release:	2
 License:	CC BY-SA 4.0
 Group:		Applications/System
 Source:		updatezone.tgz
