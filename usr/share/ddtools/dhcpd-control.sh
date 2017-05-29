@@ -320,11 +320,8 @@ trap "clean_dhcpdcontrol" 0
          tmp_dhcpd_local_file="$( mktemp -p /tmp dhcpd.XXXXX )"
          cp -p "${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_local_file}"
          $EDITOR "${tmp_dhcpd_local_file}"
-         #scp -p "${DHCPD_CONTROL_OTHER_SERVER}:${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_other_file}"
-         #cp -p "${tmp_dhcpd_other_file}" "${tmp_dhcpd_other_file}8" #arbitrary number # edit file
-         #$EDITOR "${tmp_dhcpd_other_file}8"
          # if change occurred, prepare to replace
-         if ! cmp -s "${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_other_file}";
+         if ! cmp -s "${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_local_file}";
          then
             debuglev 1 && ferror "Updating local dhcpd file."
             /usr/share/bgscripts/bup.sh "${DHCPD_CONTROL_DHCPD_FILE}"
