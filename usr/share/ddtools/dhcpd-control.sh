@@ -13,6 +13,8 @@
 #    merge lines with sed http://www.linuxquestions.org/questions/programming-9/merge-lines-in-a-file-using-sed-191121/
 # Improve:
 #    provide mechanisms for non-systemd service control
+#    prove that doing --remove-mac only on local is sufficient.
+#    provide ways to specify what to see in the --list output
 # Dependencies:
 #    systemd
 fiversion="2017-05-24a"
@@ -20,7 +22,7 @@ dhcpdcontrolversion="2017-05-29a"
 
 usage() {
    less -F >&2 <<ENDUSAGE
-usage: dhcpd-control.sh [-duV] [ --flush | --edit | --edit-local | --edit-other | --remove-mac <mac> ] [ --force ]
+usage: dhcpd-control.sh [-duV] [ --flush | --edit | --edit-local | --edit-other | --remove-mac <mac> | --list ] [ --force ]
 version ${dhcpdcontrolversion}
  -d debug   Show debugging info, including parsed variables.
  -u usage   Show this usage block.
@@ -30,6 +32,7 @@ version ${dhcpdcontrolversion}
  --edit-local Edit the local file.
  --edit-other Edit the other server dhcpd file.
  --remove-mac <MAC> Clears the leases for this MAC address.
+ --list     List current leases.
 Return values:
 0 Normal
 1 Help or version info displayed
@@ -46,7 +49,7 @@ ENDUSAGE
 
 clean_dhcpdcontrol() {
    {
-      rm -f ${tmp_dhcpd_combined_file} ${tmp_dhcpd_local_file} ${tmp_dhcpd_other_file} ${tmp_mac_local_file} ${tmp_macless_local_file}
+      rm -f ${tmp_dhcpd_combined_file} ${tmp_dhcpd_local_file} ${tmp_dhcpd_other_file} ${tmp_mac_local_file} ${tmp_macless_local_file} ${tmp_leases_other_file} ${tmp_mac_other_file} ${tmp_macless_other_file}
    } 1>/dev/null 2>&1
    #use at end of entire script if you need to clean up tmpfiles
 }
@@ -77,6 +80,7 @@ parseFlag() {
       "edit-other" ) action="edit-other";;
       "edit" ) action="edit";;
       "remove-mac" ) getval; DHCPD_CONTROL_MAC_TO_REMOVE="${tempval}"; action="remove-mac";;
+      "list" ) action="list";;
    esac
    
    debuglev 10 && { test ${hasval} -eq 1 && ferror "flag: ${flag} = ${tempval}" || ferror "flag: ${flag}"; }
@@ -358,17 +362,30 @@ trap "clean_dhcpdcontrol" 0
          # sed -n -r -e '/^lease.*\{/,/^\}/{/^lease|hardware|\}/{p}}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' # base form
          # sed -n -r -e '/^lease.*\{/,/^\}/{p}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' # slightly trimmed
          # sed -n -r -e '/\{/,/^\}/{p}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "ec:9a:74:48:bc:c4" # find the one mac address
+
+         # prepare temp files
          tmp_mac_local_file="$( mktemp -p /tmp leases.mac.XXXXX )"
          tmp_macless_local_file="$( mktemp -p /tmp leases.macless.XXXXX )"
+         tmp_leases_other_file="$( mktemp -p /tmp leases.other.XXXXX )"
+         tmp_mac_other_file="$( mktemp -p /tmp leases.mac.XXXXX )"
+         tmp_macless_other_file="$( mktemp -p /tmp leases.macless.XXXXX )"
          if test -z "${DHCPD_CONTROL_MAC_TO_REMOVE}";
          then
             ferror "${scripttrim}: 2. No MAC address provided. aborted."
             exit 2
          fi
+
+         scp -p "${DHCPD_CONTROL_OTHER_SERVER}:${DHCPD_CONTROL_LEASES_FILE}" "${tmp_leases_other_file}"
+
+         # prepare list of local leases to clear
          sed -n -r -e '/\{/,/^\}/{p}' "${DHCPD_CONTROL_LEASES_FILE}" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "${DHCPD_CONTROL_MAC_TO_REMOVE}" > "${tmp_mac_local_file}"
+         # prepare list of other leases to clear
+         sed -n -r -e '/\{/,/^\}/{p}' "${tmp_leases_other_file}" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "${DHCPD_CONTROL_MAC_TO_REMOVE}" > "${tmp_mac_other_file}"
+
+         # remove leases from this dhcpd server
          if test -n "$( cat "${tmp_mac_local_file}" )";
          then
-            ferror "Removing leases:"
+            ferror "Removing leases from this dhcpd server:"
             cat "${tmp_mac_local_file}" 1>&2
          fi
          sed -n -r -e '/\{/,/^\}/{p}' "${DHCPD_CONTROL_LEASES_FILE}" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -viE "${DHCPD_CONTROL_MAC_TO_REMOVE}" > "${tmp_macless_local_file}"
@@ -378,8 +395,31 @@ trap "clean_dhcpdcontrol" 0
             cp -p "${tmp_macless_local_file}" "${DHCPD_CONTROL_LEASES_FILE}"
             restart_service_local=1
          fi
+
+         # remove leases from other dhcpd server
+         if test -n "$( cat "${tmp_mac_other_file}" )";
+         then
+            ferror "Removing leases from other dhcpd server:"
+            cat "${tmp_mac_other_file}" 1>&2
+         fi
+         sed -n -r -e '/\{/,/^\}/{p}' "${tmp_leases_other_file}" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -viE "${DHCPD_CONTROL_MAC_TO_REMOVE}" > "${tmp_macless_other_file}"
+         if ! cmp -s "${tmp_macless_other_file}" "${tmp_leases_other_file}";
+         then
+            ssh "${DHCPD_CONTROL_OTHER_SERVER}" systemctl stop "${DHCPD_CONTROL_SERVICE}"
+            scp -p "${tmp_macless_other_file}" "${DHCPD_CONTROL_LEASES_FILE}"
+            restart_service_other=1
+         fi
          ;;
 
+      "list")
+         # WORKHERE: list on this and the secondary server.
+         debuglev 8 && ferror "BEGIN list"
+         lease_type="active"
+         #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "active"
+         #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | awk '!x[$14]++' | sort -k2
+         #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's | awk '!x[$14]++' | sort -k2
+         #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's/hardware ethernet/mac/;' | awk '!x[$13]++' | sort -k2
+         sed -n -r -e '/\{/,/^\}/{p}' "${DHCPD_CONTROL_LEASES_FILE}" | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's/hardware ethernet/mac/;' | grep -viE "failover peer" | awk '!x[$13]++' | sort -k2
    esac
 
    # Prepare instructions for other server
