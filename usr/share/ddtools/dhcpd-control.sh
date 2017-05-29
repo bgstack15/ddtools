@@ -13,12 +13,12 @@
 #    merge lines with sed http://www.linuxquestions.org/questions/programming-9/merge-lines-in-a-file-using-sed-191121/
 # Improve:
 #    provide mechanisms for non-systemd service control
-#    prove that doing --remove-mac only on local is sufficient.
 #    provide ways to specify what to see in the --list output
+#    list leases on both servers
 # Dependencies:
 #    systemd
 fiversion="2017-05-24a"
-dhcpdcontrolversion="2017-05-29a"
+dhcpdcontrolversion="2017-05-29b"
 
 usage() {
    less -F >&2 <<ENDUSAGE
@@ -115,8 +115,7 @@ action=""
 define_if_new interestedparties "bgstack15@gmail.com"
 # SIMPLECONF
 #define_if_new default_conffile "/etc/sysconfig/dhcpd-control"
-# WORKHERE: fix sysconfig call to normal spot
-define_if_new default_conffile "/home/bgirton/rpmbuild/SOURCES/ddtools-0.0-2/etc/sysconfig/dhcpd-control"
+define_if_new default_conffile "/etc/sysconfig/dhcpd-control"
 #define_if_new defuser_conffile ~/.config/dhcpdcontrol/dhcpdcontrol.conf
 define_if_new EDITOR vi
 
@@ -358,7 +357,6 @@ trap "clean_dhcpdcontrol" 0
       "remove-mac")
          debuglev 8 && ferror "BEGIN remove-mac"
          # working on this
-         # WORKHERE: verify that doing it on local is sufficient.
          # sed -n -r -e '/^lease.*\{/,/^\}/{/^lease|hardware|\}/{p}}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' # base form
          # sed -n -r -e '/^lease.*\{/,/^\}/{p}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' # slightly trimmed
          # sed -n -r -e '/\{/,/^\}/{p}' /tmp/foo1 | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "ec:9a:74:48:bc:c4" # find the one mac address
@@ -412,7 +410,6 @@ trap "clean_dhcpdcontrol" 0
          ;;
 
       "list")
-         # WORKHERE: list on this and the secondary server.
          debuglev 8 && ferror "BEGIN list"
          lease_type="active"
          #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' | grep -iE "active"
@@ -420,6 +417,8 @@ trap "clean_dhcpdcontrol" 0
          #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's | awk '!x[$14]++' | sort -k2
          #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's/hardware ethernet/mac/;' | awk '!x[$13]++' | sort -k2
          sed -n -r -e '/\{/,/^\}/{p}' "${DHCPD_CONTROL_LEASES_FILE}" | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's/hardware ethernet/mac/;' | grep -viE "failover peer" | awk '!x[$13]++' | sort -k2
+         ;;
+
    esac
 
    # Prepare instructions for other server
