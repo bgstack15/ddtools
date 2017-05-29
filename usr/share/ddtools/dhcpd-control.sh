@@ -5,11 +5,15 @@
 # Startdate: 2017-05-28 18:18:46
 # Title: Script that Facilitates the Configuration of DHCPD
 # Purpose: 
-# Package: 
+# Package: ddtools
 # History: 
 # Usage: 
 # Reference: ftemplate.sh 2017-05-24a; framework.sh 2017-05-24a
+#    order of dhcpd servers to restart https://kb.isc.org/article/AA-01043/0/Recommendations-for-restarting-a-DHCP-failover-pair.html
 # Improve:
+#    provide mechanisms for non-systemd service control
+# Dependencies:
+#    systemd
 fiversion="2017-05-24a"
 dhcpdcontrolversion="2017-05-29a"
 
@@ -234,9 +238,12 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
       set | grep -iE "^DHCPD_CONTROL_" 1>&2
    }
 
-   please_update_other_server_conf=0
-   please_update_other_server_leases=0
-   please_update_other_server_service=0
+   update_conf_local=0
+   update_leases_local=0
+   restart_service_local=0
+   update_conf_other=0
+   update_leases_other=0
+   restart_service_other=0
    # WORKHERE: add local service, other_server_service
    case "${action}" in
 
@@ -251,8 +258,11 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
             then
                case "${DHCPD_CONTROL_LEASES_TEMP_FILE}" in
                   /var/lib/dhcp*)
+                     systemctl stop "${DHCPD_CONTROL_SERVICE}"
                      rm -f "${DHCPD_CONTROL_LEASES_TEMP_FILE}"
-                     please_update_other_server_conf=1
+                     update_leases_other=1;
+                     restart_service_other=1;
+                     restart_service_local=1;
                      ;;
                   *)
                      ferror "Will not delete unsafe leases temp file ${DHCPD_CONTROL_LEASES_TEMP_FILE}."
@@ -269,8 +279,11 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
             then
                case "${DHCPD_CONTROL_LEASES_FILE}" in
                   /var/lib/dhcp*)
+                     systemctl stop "${DHCPD_CONTROL_SERVICE}"
                      printf "" > "${DHCPD_CONTROL_LEASES_FILE}"
-                     please_update_other_server_conf=1
+                     update_leases_other=1;
+                     restart_service_other=1;
+                     restart_service_local=1;
                      ;;
                   *)
                      ferror "Will not clear unsafe leases file ${DHCPD_CONTROL_LEASES_FILE}."
@@ -281,13 +294,40 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
          ;;
    esac
 
-   # Update other server if necessary
-   if fistruthy "${please_update_other_server}";
+   # Prepare instructions for other server
+   local_instructions=""
+   other_instructions=""
+   instructions=""
+   fistruthy "${update_leases_other}" && \
+      other_instructions="${other_instructions}systemctl stop ${DHCPD_CONTROL_SERVICE}\; rm -f ${DHCPD_CONTROL_LEASES_TEMP_FILE}\; echo \"\" \> ${DHCPD_CONTROL_LEASES_FILE}\; "
+   fistruthy "${update_conf_other}" && \
+      local_instructions="${local_instructions}scp ${DHCPD_CONTROL_CONF_FILE} ${DHCPD_OTHER_SERVER}; "
+   fistruthy "${restart_service_local}" && \
+      instructions="${instructions}systemctl restart ${DHCPD_CONTROL_SERVICE}.service"
+   fistruthy "${restart_service_other}" && \
+      other_instructions="${other_instructions}systemctl restart ${DHCPD_CONTROL_SERVICE}"
+
+   # Instruct other server to act
+   if test -n "${DHCPD_CONTROL_OTHER_SERVER}";
    then
-      if test -n "${DHCPD_CONTROL_OTHER_SERVER}";
-      then
-         echo "please notify other server ${DHCPD_CONTROL_OTHER_SERVER}"
-      fi
+      debuglev 1 && {
+         ferror "run local commands:"
+         ferror "${local_instructions}"
+         ferror "run on other server ${DHCPD_CONTROL_OTHER_SERVER}:"
+         ferror "ssh ${DHCPD_CONTROL_OTHER_SERVER} ${other_instructions}"
+      }
+      ${local_instructions}
+      ssh ${DHCPD_CONTROL_OTHER_SERVER} eval ${other_instructions}
+   fi
+
+   # Local actions regardless of other server
+   if test -n "${instructions}";
+   then
+      debuglev 1 && {
+         ferror "run commands:"
+         ferror "${instructions}"
+      }
+      ${instructions}
    fi
 
 #} | tee -a ${logfile}
