@@ -1,8 +1,8 @@
-File: usr/share/updatezone/docs/README.txt
-Package: updatezone
+File: usr/share/ddtools/docs/README.txt
+Package: ddtools
 Author: bgstack15
 Startdate: 2017-05-26
-Title: Readme file for updatezone
+Title: Readme file for ddtools
 Purpose: All packages should come with a readme
 Usage: Read it.
 Reference: README.txt
@@ -10,16 +10,18 @@ Improve:
 Document: Below this line
 
 ### WELCOME
+ddtools is a suite of shell scripts that help manage dns and dhcpd.
 Updatezone provides an easy way to update dns zone files. Intended primarily for bind9 zone files, experimentation is encouraged.
 Instead of running the series of commands manually: rndc freeze, vi zonefile, rndc thaw and so on, use updatezone.
+dhcpd-control helps manage paired dhcpd servers.
 
 ### CONFIGURATION
-The conf files belong in /etc/updatezone/. See example in /usr/share/updatezone/examples/.
+The conf files belong in /etc/ddtools/. See example in /usr/share/ddtools/examples/.
 
 ### USING THIS TOOL
 
 $ updatezone ipa.smith122.com
-Where this file exists: /etc/updatezone/ipa.smith122.com.conf
+Where this file exists: /etc/ddtools/ipa.smith122.com.conf
 
     UZ_ZONE_NAME=ipa.smith122.com
     UZ_FORWARD_ZONE=ipa.smith122.com
@@ -42,5 +44,5 @@ $ updatezone ipa.smith122.com ad.smith122.com
 ### REFERENCE
 
 ### CHANGELOG
-2017-05-27 B Stack <bgstack15@gmail.com> 0.0-1
+2017-05-27 B Stack <bgstack15@gmail.com> 0.0-2
 - Initial package construction

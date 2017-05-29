@@ -1,20 +1,23 @@
 # ref: http://www.rpm.org/max-rpm/s1-rpm-build-creating-spec-file.html
-Summary:	update dns zone files easily
-Name:		updatezone
+Summary:	suite of scripts for managing dns and dhcpd
+Name:		ddtools
 Version:	0.0
 Release:	2
 License:	CC BY-SA 4.0
 Group:		Applications/System
-Source:		updatezone.tgz
+Source:		ddtools.tgz
 URL:		https://bgstack15.wordpress.com/
 #Distribution:
 #Vendor:
 Packager:	B Stack <bgstack15@gmail.com>
 Requires:	bgscripts-core >= 1.2-11
+Obsoletes:	updatezone <= %{version}-%{release}
 Buildarch:	noarch
 
 %description
-updatezone provides updatezone.sh which takes a simple config file for selecting the dns zone files to edit. Bind is the only supported dns server right now, but experimentation is encouraged.
+ddtools provides shell scripts that help manage dns and dhcpd.
+updatezone.sh takes a simple config file for selecting the dns zone files to edit. Bind is the only supported dns server right now, but experimentation is encouraged.
+dhcpd-control helps manage paired dhcpd servers.
 
 #%global _python_bytecompile_errors_terminate_build 0
 
