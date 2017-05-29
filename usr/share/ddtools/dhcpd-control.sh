@@ -3,8 +3,8 @@
 # Location: 
 # Author: bgstack15@gmail.com
 # Startdate: 2017-05-28 18:18:46
-# Title: Script that Facilitates the Configuration of DHCPD
-# Purpose: 
+# Title: Script that Facilitates the Configuration of DHCPD Across a Server Pair
+# Purpose: Provides a single command for would take a series of steps
 # Package: ddtools
 # History: 
 # Usage: 
@@ -19,7 +19,7 @@ dhcpdcontrolversion="2017-05-29a"
 
 usage() {
    less -F >&2 <<ENDUSAGE
-usage: dhcpd-control.sh [-duV] [ --flush | --edit | --edit-local | --remove-mac <mac> ] [ --force ]
+usage: dhcpd-control.sh [-duV] [ --flush | --edit | --edit-local | --edit-other | --remove-mac <mac> ] [ --force ]
 version ${dhcpdcontrolversion}
  -d debug   Show debugging info, including parsed variables.
  -u usage   Show this usage block.
@@ -27,6 +27,7 @@ version ${dhcpdcontrolversion}
  --flush    Clears all current leases
  --edit     Edit the combined file-- the one shared by both servers.
  --edit-local Edit the local file.
+ --edit-other Edit the other server dhcpd file.
  --remove-mac <MAC> Clears the leases for this MAC address.
 Return values:
 0 Normal
@@ -43,13 +44,14 @@ ENDUSAGE
 # DEFINE TRAPS
 
 clean_dhcpdcontrol() {
-   #rm -f ${logfile} > /dev/null 2>&1
-   [ ] #use at end of entire script if you need to clean up tmpfiles
+   rm -f ${tmp_dhcpd_combined_file} ${tmp_dhcpd_local_file} ${tmp_dhcpd_other_file} > /dev/null 2>&1
+   #use at end of entire script if you need to clean up tmpfiles
 }
 
 CTRLC() {
    #trap "CTRLC" 2
-   [ ] #useful for controlling the ctrl+c keystroke
+   clean_dhcpdcontrol
+   #useful for controlling the ctrl+c keystroke
 }
 
 CTRLZ() {
@@ -69,6 +71,7 @@ parseFlag() {
       "f" | "force" ) DHCPD_CONTROL_FORCE=1;;
       "flush" ) action="flush";;
       "edit-local" ) action="edit-local";;
+      "edit-other" ) action="edit-other";;
       "edit" ) action="edit";;
       "remove-mac" ) getval; DHCPD_CONTROL_MAC_TO_REMOVE="${tempval}";;
    esac
@@ -105,6 +108,7 @@ action=""
 define_if_new interestedparties "bgstack15@gmail.com"
 # SIMPLECONF
 #define_if_new default_conffile "/etc/sysconfig/dhcpd-control"
+# WORKHERE: fix sysconfig call to normal spot
 define_if_new default_conffile "/home/bgirton/rpmbuild/SOURCES/ddtools-0.0-2/etc/sysconfig/dhcpd-control"
 #define_if_new defuser_conffile ~/.config/dhcpdcontrol/dhcpdcontrol.conf
 define_if_new EDITOR vi
@@ -208,9 +212,9 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
 #fi
 
 # SET TRAPS
-#trap "CTRLC" 2
+trap "CTRLC" 2
 #trap "CTRLZ" 18
-#trap "clean_dhcpdcontrol" 0
+trap "clean_dhcpdcontrol" 0
 
 # MAIN LOOP
 #{
@@ -292,6 +296,57 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
             fi
          fi
          ;;
+
+      "edit")
+         # prepare temp file
+         tmp_dhcpd_combined_file="$( mktemp -p /tmp dhcpd.combined.XXXXX )"
+         cp -p "${DHCPD_CONTROL_COMBINED_FILE}" "${tmp_dhcpd_combined_file}"
+         # edit file
+         $EDITOR "${tmp_dhcpd_combined_file}"
+         # if change occurred, prepare to replace
+         if ! cmp -s "${DHCPD_CONTROL_COMBINED_FILE}" "${tmp_dhcpd_combined_file}";
+         then
+            debuglev 1 && ferror "Updating dhcpd combined file."
+            /usr/share/bgscripts/bup.sh "${DHCPD_CONTROL_COMBINED_FILE}"
+            cp -p "${tmp_dhcpd_combined_file}" "${DHCPD_CONTROL_COMBINED_FILE}"
+            update_conf_other=1
+            restart_service_local=1
+            restart_service_other=1
+         fi
+         ;;
+
+      "edit-local")
+         # prepare temp file
+         tmp_dhcpd_local_file="$( mktemp -p /tmp dhcpd.XXXXX )"
+         cp -p "${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_local_file}"
+         $EDITOR "${tmp_dhcpd_local_file}"
+         #scp -p "${DHCPD_CONTROL_OTHER_SERVER}:${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_other_file}"
+         #cp -p "${tmp_dhcpd_other_file}" "${tmp_dhcpd_other_file}8" #arbitrary number # edit file
+         #$EDITOR "${tmp_dhcpd_other_file}8"
+         # if change occurred, prepare to replace
+         if ! cmp -s "${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_other_file}";
+         then
+            debuglev 1 && ferror "Updating local dhcpd file."
+            /usr/share/bgscripts/bup.sh "${DHCPD_CONTROL_DHCPD_FILE}"
+            cp -p "${tmp_dhcpd_local_file}" "${DHCPD_CONTROL_DHCPD_FILE}"
+            restart_service_local=1
+         fi
+         ;;
+
+      "edit-other")
+         tmp_dhcpd_other_file="$( mktemp -p /tmp dhcpd.other.XXXXX )"
+         scp -p "${DHCPD_CONTROL_OTHER_SERVER}:${DHCPD_CONTROL_DHCPD_FILE}" "${tmp_dhcpd_other_file}"
+         cp -p "${tmp_dhcpd_other_file}" "${tmp_dhcpd_other_file}8" #arbitrary number # edit file
+         ${EDITOR} "${tmp_dhcpd_other_file}8"
+         if ! cmp -s "${tmp_dhcpd_other_file}" "${tmp_dhcpd_other_file}8";
+         then
+            debuglev 1 && ferror "Updating other server dhcpd file."
+            ssh "${DHCPD_CONTROL_OTHER_SERVER}" /usr/share/bgscripts/bup.sh "${DHCPD_CONTROL_DHCPD_FILE}";
+            scp -p "${tmp_dhcpd_other_file}8" "${DHCPD_CONTROL_OTHER_SERVER}:${DHCPD_CONTROL_DHCPD_FILE}";
+            restart_service_other=1
+         fi
+         ;;
+
    esac
 
    # Prepare instructions for other server
@@ -301,7 +356,7 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
    fistruthy "${update_leases_other}" && \
       other_instructions="${other_instructions}systemctl stop ${DHCPD_CONTROL_SERVICE}\; rm -f ${DHCPD_CONTROL_LEASES_TEMP_FILE}\; echo \"\" \> ${DHCPD_CONTROL_LEASES_FILE}\; "
    fistruthy "${update_conf_other}" && \
-      local_instructions="${local_instructions}scp ${DHCPD_CONTROL_CONF_FILE} ${DHCPD_OTHER_SERVER}; "
+      local_instructions="${local_instructions}scp ${DHCPD_CONTROL_COMBINED_FILE} ${DHCPD_CONTROL_OTHER_SERVER}:${DHCPD_CONTROL_COMBINED_FILE}; "
    fistruthy "${restart_service_local}" && \
       instructions="${instructions}systemctl restart ${DHCPD_CONTROL_SERVICE}.service"
    fistruthy "${restart_service_other}" && \
@@ -311,13 +366,17 @@ test -f "${default_conffile}" && get_conf "${default_conffile}"
    if test -n "${DHCPD_CONTROL_OTHER_SERVER}";
    then
       debuglev 1 && {
-         ferror "run local commands:"
-         ferror "${local_instructions}"
-         ferror "run on other server ${DHCPD_CONTROL_OTHER_SERVER}:"
-         ferror "ssh ${DHCPD_CONTROL_OTHER_SERVER} ${other_instructions}"
+         test -n "${local_instructions}" && {
+            ferror "run local commands:"
+            ferror "${local_instructions}"
+         }
+         test -n "${other_instructions}" && { 
+            ferror "run on other server ${DHCPD_CONTROL_OTHER_SERVER}:"
+            ferror "ssh ${DHCPD_CONTROL_OTHER_SERVER} ${other_instructions}"
+         }
       }
-      ${local_instructions}
-      ssh ${DHCPD_CONTROL_OTHER_SERVER} eval ${other_instructions}
+      test -n "${local_instructions}" && ${local_instructions}
+      test -n "${other_instructions}" && ssh ${DHCPD_CONTROL_OTHER_SERVER} eval ${other_instructions}
    fi
 
    # Local actions regardless of other server
