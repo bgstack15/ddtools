@@ -1,0 +1,3 @@
+doc/README.txt
+doc/version.txt
+build/ddtools.spec

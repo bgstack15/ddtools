@@ -2,7 +2,7 @@
 Summary:	suite of scripts for managing dns and dhcpd
 Name:		ddtools
 Version:	0.0
-Release:	2
+Release:	3
 License:	CC BY-SA 4.0
 Group:		Applications/System
 Source:		ddtools.tgz
@@ -55,5 +55,8 @@ exit 0
 %verify(link) /usr/bin/dhcpd-control
 
 %changelog
+* Sat Oct 14 2017 B Stack <bgstack15@gmail.com> 0.0-3
+- Updated content. See doc/README.txt
+
 * Sat May 27 2017 B Stack <bgstack15@gmail.com> 0.0-1
 - Initial rpm release

@@ -1,3 +1,0 @@
-docs/README.txt
-docs/ddtools.spec
-docs/debian-ddtools/control

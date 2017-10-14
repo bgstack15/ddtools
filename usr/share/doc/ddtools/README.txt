@@ -46,3 +46,6 @@ $ updatezone ipa.smith122.com ad.smith122.com
 ### CHANGELOG
 2017-05-27 B Stack <bgstack15@gmail.com> 0.0-2
 - Initial package construction
+
+2017-10-14 B Stack <bgstack15@gmail.com> 0.0-3
+- Rearranged directory structure to match current standards
