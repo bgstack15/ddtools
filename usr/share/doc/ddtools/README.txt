@@ -49,3 +49,4 @@ $ updatezone ipa.smith122.com ad.smith122.com
 
 2017-10-14 B Stack <bgstack15@gmail.com> 0.0-3
 - Rearranged directory structure to match current standards
+- Added bash autocompletion definition for updatezone

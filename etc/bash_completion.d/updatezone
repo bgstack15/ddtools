@@ -1,0 +1,13 @@
+_updatezone_autocomplete() {
+   #devtty=/dev/pts/2
+   local cur prev words cword;
+   _init_completion || return
+   local _tmpfile1="$( mktemp )"
+   grep -iE "UZ_ZONE_NAME=" /etc/ddtools/*.conf 2>/dev/null | sed -r -e 's/^UZ_.*=//;' >> "${_tmpfile1}"
+   #echo "----- ${cur} --- prev: ${prev} -- words: ${words} -- cword: ${cword} --" > "${devtty}"
+   grep -viE "${cur}" "${_tmpfile1}"
+   COMPREPLY=($( compgen -W "$( grep -viE "${prev}" "${_tmpfile1}" )" -- "$cur" ))
+   command rm -f "${_tmpfile1}" 1>/dev/null 2>&1
+   return 0
+}
+complete -F _updatezone_autocomplete updatezone

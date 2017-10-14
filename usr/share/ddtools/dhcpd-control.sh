@@ -418,7 +418,10 @@ trap "clean_dhcpdcontrol" 0
          #sed -n -r -e '/\{/,/^\}/{p}' /var/lib/dhcpd/dhcpd.leases | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's/hardware ethernet/mac/;' | awk '!x[$13]++' | sort -k2
          sed -n -r -e '/\{/,/^\}/{p}' "${DHCPD_CONTROL_LEASES_FILE}" | grep -iE "\{|\}|client-fqdn|hostname|hardware|starts|ends" | sed -e ':a;/\}/!{N;s/\n/ /;ba};' -e 's/\s\+/ /g;' -e 's/hardware ethernet/mac/;' | grep -viE "failover peer" | awk '!x[$13]++' | sort -k2
          ;;
-
+      *)
+         ferror "Gotta say unh! Action ${action} ${fallopts} not yet implemented. Aborted."
+         exit 1
+         ;;
    esac
 
    # Prepare instructions for other server
