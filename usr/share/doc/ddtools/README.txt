@@ -39,6 +39,11 @@ This tool will only request updates for zones that are updated. Also, you do not
 You can also specify multiple zones on the command line.
 $ updatezone ipa.smith122.com ad.smith122.com
 
+You can also use the --flush flag to clear out the A and PTR records whose TTL matches the dhcp server TTL. It ties in nicely with the dhcpd-control --flush command. Remember that you need to give a zone name (or -c conffile) option as well.
+
+Example:
+updatezone --flush ipa.smith122.com
+
 ### NOTES
 
 ### REFERENCE
@@ -50,3 +55,4 @@ $ updatezone ipa.smith122.com ad.smith122.com
 2017-10-14 B Stack <bgstack15@gmail.com> 0.0-3
 - Rearranged directory structure to match current standards
 - Added bash autocompletion definition for updatezone
+- Added --flush to updatezone to match dhcpd-control
