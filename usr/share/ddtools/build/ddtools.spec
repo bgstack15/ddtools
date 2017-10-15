@@ -40,19 +40,6 @@ exit 0
 exit 0
 
 %files
-%dir /etc/ddtools
-%dir /usr/share/ddtools
-/etc/sysconfig/dhcpd-control
-/usr/share/ddtools/inc/get-files
-/usr/share/ddtools/inc/pack
-%config %attr(666, -, -) /usr/share/ddtools/examples/ipa.smith122.com.conf.example
-%doc %attr(444, -, -) /usr/share/ddtools/docs/files-for-versioning.txt
-%doc %attr(444, -, -) /usr/share/ddtools/docs/README.txt
-/usr/share/ddtools/docs/ddtools.spec
-/usr/share/ddtools/updatezone.sh
-/usr/share/ddtools/dhcpd-control.sh
-%verify(link) /usr/bin/updatezone
-%verify(link) /usr/bin/dhcpd-control
 
 %changelog
 * Sat Oct 14 2017 B Stack <bgstack15@gmail.com> 0.0-3

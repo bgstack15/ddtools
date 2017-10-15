@@ -7,6 +7,7 @@
 # Purpose: Provides a single command to update dns zones
 # Package: updatezone
 # History: 
+#    2017-10-15 Added --flush option
 # Usage: 
 #    Primarily intended for updating forward and reverse zones for bind9.
 # Reference: ftemplate.sh 2017-05-24a; framework.sh 2017-05-24a
@@ -16,17 +17,19 @@
 #    ssh with password-less authentication to slave servers
 #    each zone file has only a single zone
 fiversion="2017-05-24a"
-updatezoneversion="2017-05-29a"
+updatezoneversion="2017-10-15b"
 
 usage() {
    less -F >&2 <<ENDUSAGE
-usage: updatezone.sh [-duV] [ -c conffile | zone1 zone2 ... ]
+usage: updatezone.sh [-duV] [ --flush ] [ -c conffile | zone1 zone2 ... ]
 version ${updatezoneversion}
  -d debug   Show debugging info, including parsed variables.
  -u usage   Show this usage block.
  -V version Show script version number.
+  --flush   Wipe all the dhcpd-defined entries.
  -c conffile Choose which conffile. Required if you do not name specific zones
  zone1      Dns zone defined as UZ_ZONE_NAME in any .conf file in ${default_dir}/
+If the flush action is not requested, the normal action is edit, so you will interactively edit the zonefiles.
 Return values:
 0 Normal
 1 Help or version info displayed
@@ -42,7 +45,7 @@ ENDUSAGE
 # DEFINE FUNCTIONS
 
 check_zone_file() {
-   # call: check_zone_file forward "${zone_name}" "${forward_file}" "{temp_forward_file}"
+   # call: check_zone_file forward "${zone_name}" "${forward_file}" "{tmp_forward_file}"
    debuglev 9 && ferror "check_zone_file $@"
    local zone_type="$1"
    local zone_name="$2"
@@ -94,7 +97,7 @@ zone_action() {
 }
 
 update_real_zone_if_updated() {
-   # call: update_real_zone_if_updated "${UZ_REVERSE_ZONE}" "${UZ_REVERSE_FILE}" "${temp_rev_file}"
+   # call: update_real_zone_if_updated "${UZ_REVERSE_ZONE}" "${UZ_REVERSE_FILE}" "${tmp_rev_file}"
    debuglev 9 && ferror "update_real_zone_if_updated $@"
    local zone_name="$1"
    local zone_real_file="$2"
@@ -153,6 +156,7 @@ parseFlag() {
       "V" | "fcheck" | "version" ) ferror "${scriptfile} version ${updatezoneversion}"; exit 1;;
       #"i" | "infile" | "inputfile" ) getval;infile1=${tempval};;
       "c" | "conf" | "config" | "conffile" ) getval;conffile=${tempval};;
+      "flush" ) action=flush;;
    esac
    
    debuglev 10 && { test ${hasval} -eq 1 && ferror "flag: ${flag} = ${tempval}" || ferror "flag: ${flag}"; }
@@ -270,21 +274,24 @@ then
    exit 4
 fi
 
-# MAIN LOOP
-main() {
-   # call: main "${conffile}"
-   get_conf "$1"
+# MAIN ACTIONS
+
+# EDIT
+main_action() {
+   # call: main_action "${action}" "${conffile}"
+   local action="${1}"
+   get_conf "${2}"
    # DEBUG SIMPLECONF
    debuglev 5 && {
       ferror "Using values"
       # used values: EX_(OPT1|OPT2|VERBOSE)
       set | grep -iE "^UZ_" 1>&2
    }
-   local temp_for_file="$( mktemp -p "${tempdir}" forward.XXXX 2>/dev/null )"
-   local temp_rev_file="$( mktemp -p "${tempdir}" reverse.XXXX 2>/dev/null )"
+   local tmp_for_file="$( mktemp -p "${tempdir}" forward.XXXX 2>/dev/null )"
+   local tmp_rev_file="$( mktemp -p "${tempdir}" reverse.XXXX 2>/dev/null )"
    local zones_to_thaw_file="$( mktemp -p "${tempdir}" thaw.XXXX )"
    local zones_to_update_file="$( mktemp -p "${tempdir}" update.XXXX )"
-   for word in "${temp_for_file}" "${temp_rev_file}";
+   for word in "${tmp_for_file}" "${tmp_rev_file}";
    do
       if test ! -f "${word}";
       then
@@ -293,23 +300,64 @@ main() {
       fi
    done
 
+   # Freezing the zone ensures all records are in the primary files which we check.
    local pause_to_show_error=0
    # Check forward zone file and freeze
-   check_zone_file forward "${UZ_FORWARD_ZONE}" "${UZ_FORWARD_FILE}" "${temp_for_file}"
+   check_zone_file forward "${UZ_FORWARD_ZONE}" "${UZ_FORWARD_FILE}" "${tmp_for_file}"
 
    # Check reverse zone file and freeze
-   check_zone_file reverse "${UZ_REVERSE_ZONE}" "${UZ_REVERSE_FILE}" "${temp_rev_file}"
+   check_zone_file reverse "${UZ_REVERSE_ZONE}" "${UZ_REVERSE_FILE}" "${tmp_rev_file}"
 
    # Slow down to show errors if any
    fistruthy "${pause_to_show_error}" && sleep 1.3
 
-   # Allow user to edit files that exist
-   local these_temp_files="$( find "${temp_for_file}" "${temp_rev_file}" 2>/dev/null | xargs )"
-   test -n "${these_temp_files}" && $EDITOR ${these_temp_files}
+   case "${action}" in
+
+      edit)
+         # EDIT FILES INTERACTIVELY
+         local these_temp_files="$( find "${tmp_for_file}" "${tmp_rev_file}" 2>/dev/null | xargs )"
+         test -n "${these_temp_files}" && $EDITOR ${these_temp_files}
+         ;;
+
+      flush)
+         # FLUSH FILES AUTOMATICALLY
+
+         # CALCULATE WHICH RECORDS TO FLUSH
+         # get dhcpd ttl.
+         #set -x
+         local tmp_flush_master_file="$( mktemp -p "${tempdir}" flush.master.XXXX 2>/dev/null )"
+         local tmp_flush_for_file="$( mktemp -p "${tempdir}" flush.for.XXXX 2>/dev/null )"
+         local tmp_flush_rev_file="$( mktemp -p "${tempdir}" flush.rev.XXXX 2>/dev/null )"
+
+         local dhcpd_ttl="$( grep -hE "default-lease-time" $( { $( which dhcpd-control ) --debug 5 nop; } 2>&1 | grep -E "_FILE=" | grep -vE "LEASES_" | cut -d'=' -f2 | xargs ) | cut -d' ' -f2 | tr -d ';' )"
+         # this next statement only returns an integer, but the rounding should be the same as the dns ttl rounding
+         local dns_ttl="$( printf "${dhcpd_ttl}/2\n" | bc )"
+
+         debuglev 2 && ferror "Flushing entries that have ttl ${dns_ttl} and have a TXT hash"
+         # fetch all dns A and TXT records that have the requested TTL
+         awk '$1 == "$TTL" {a=$2;} $1 != "$TTL" {if(a=='${dns_ttl}' && ($1=="TXT" || $2=="A")) print;}' "${tmp_for_file}" | \
+         # restrict to the A records that have associated TXT records
+         awk 'NR>1{if ($1=="TXT") print prev,$0;} {prev=$0;}' | \
+         # only keep ones whose TXT hash is the correct length
+         awk '$4=="TXT" && $5 ~ /"[a-fA-F0-9]{34}"/ {print;}' > "${tmp_flush_master_file}"
+
+         # prepare items to flush, forward
+         # convert to each a single line in a file, for future grep -v
+         grep -oE "(([0-9]{1,3}\.){3}[0-9]{1,3}|"[a-fA-F0-9]{34}")" "${tmp_flush_master_file}" > "${tmp_flush_for_file}"
+         # prepare items to flush, reverse
+         awk '{print $1}' "${tmp_flush_master_file}" | sed -e 's/^/PTR\\s\*/;' > "${tmp_flush_rev_file}"
+
+         # flush forward records
+         grep -v -f "${tmp_flush_for_file}" "${tmp_for_file}" > "${tmp_for_file}2"; mv -f "${tmp_for_file}2" "${tmp_for_file}"
+         # flush reverse records
+         grep -v -E -f "${tmp_flush_rev_file}" "${tmp_rev_file}" > "{tmp_rev_file}2"; mv -f "${tmp_rev_file}2" "${tmp_rev_file}"
+         ;;
+
+   esac
 
    # Update the real zone if the temp file was updated
-   update_real_zone_if_updated "${UZ_FORWARD_ZONE}" "${UZ_FORWARD_FILE}" "${temp_for_file}"
-   update_real_zone_if_updated "${UZ_REVERSE_ZONE}" "${UZ_REVERSE_FILE}" "${temp_rev_file}" 
+   update_real_zone_if_updated "${UZ_FORWARD_ZONE}" "${UZ_FORWARD_FILE}" "${tmp_for_file}"
+   update_real_zone_if_updated "${UZ_REVERSE_ZONE}" "${UZ_REVERSE_FILE}" "${tmp_rev_file}" 
    # Thaw zones that need it
    while read thiszone;
    do
@@ -341,10 +389,23 @@ main() {
 
 } #| tee -a ${logfile}
 
+#######################################################
 
+# DETERMINE ACTION
+case "${action}" in
+   "flush")
+      debuglev 2 && ferror "Action is flush."
+      ;;
+   *)
+      debuglev 2 && ferror "Action is edit."
+      action=edit
+      ;;
+esac
+
+# MAIN LOOP
 if test -n "${conffile}";
 then
-   ( main "${conffile}"; )
+   ( main_action "${action}" "${conffile}"; )
 else
    # assume the $opt items are the zone names
    y=0
@@ -352,11 +413,11 @@ else
    do
       y=$(( y + 1 ))
       eval "thiszonename=\${opt${y}}"
-      debuglev 1 && ferror "Will try to update zone ${thiszonename}"
+      debuglev 1 && ferror "Will try to ${action} zone ${thiszonename}"
       file_for_this_zone="$( grep -liE "UZ_ZONE_NAME=${thiszonename}" "${default_dir}/"*.conf 2>/dev/null )"
       if test -n "${file_for_this_zone}" && test -f "${file_for_this_zone}";
       then
-         ( main "${file_for_this_zone}"; )
+         ( main_action "${action}" "${file_for_this_zone}"; )
       else
          ferror "Skipping zone ${thiszonename} for which no file was found in ${default_dir}/"
       fi
